@@ -1,5 +1,5 @@
-from ..config.database import collection
-from ..models.todo import Todo
+from ..config.tododatabase import collection
+from ..models.todomodel import Todo
 
 async def get_all_todos():
     todos = []

@@ -1,6 +1,9 @@
 from fastapi import FastAPI , HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .routes.route import router
+
+
+from .routes.userSignupRoutes import router
+
 
 
 #App object
@@ -22,7 +25,3 @@ app.add_middleware(
 
 
 app.include_router(router)
-
-
-
-
