@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from ..models.usersmodel import User , LoginResponse , UserDetailsResponse , UpdateUserRequest , ForgotPasswordRequest , ValidateOTPRequest , PasswordChangeRequest
 from ..config.usersdatabase import signupcollectioninfo 
 from ..controllers.userSignupControllers import create_user , verify_user , get_current_user , get_user_by_email 
-from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, status
 import base64
