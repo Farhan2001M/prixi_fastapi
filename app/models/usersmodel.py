@@ -11,11 +11,9 @@ class User(BaseModel):
     image: Optional[str] = None  # Default to None if not provided  # Base64 encoded image string
 
 
-
 class LoginResponse(BaseModel):
     token: str
     user: dict
-
 
 
 class UserDetailsResponse(BaseModel):
@@ -26,17 +24,14 @@ class UserDetailsResponse(BaseModel):
     image: Optional[str] = None
 
 
-
 class UpdateUserRequest(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     phoneNumber: Optional[str] = None
 
 
-
 class ForgotPasswordRequest(BaseModel):
     email: str
-
 
 
 class ValidateOTPRequest(BaseModel):

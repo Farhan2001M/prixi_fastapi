@@ -1,15 +1,20 @@
 from fastapi import FastAPI 
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes.VehicleRoutes import router
+
+from .routes.adminRoutes import router as admin_router
+from .routes.userSignupRoutes import router as signup_router
+from .routes.VehicleRoutes import router as vehicle_router
+
 
 #App object
 app = FastAPI()
 
 origins = ["http://localhost:3000",
-           "https://localhost:3000"
+           "https://localhost:3000",
+           "http://localhost:3001",
+           "https://localhost:3001",
           ]
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,8 +25,9 @@ app.add_middleware(
 )
 
 
-app.include_router(router)
-
+app.include_router(admin_router)
+app.include_router(signup_router)
+app.include_router(vehicle_router)
 
 
 @app.get("/")
@@ -30,24 +36,3 @@ async def read_root():
 
 
 
-
-
-
-
-# from .routes.todoroutes import router
-# from .routes.userSignupRoutes import router
-
-
-# from .routes.todoroutes import router as todo_router
-# from .routes.userSignupRoutes import router as user_router
-
-
-
-
-
-# Include routers
-# app.include_router(todo_router, prefix="/tasks", tags=["tasks"])
-# app.include_router(user_router, prefix="/users", tags=["users"])
-
-# app.include_router(todo_router, prefix="/tasks", )
-# app.include_router(user_router, prefix="/users", )

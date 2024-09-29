@@ -210,6 +210,36 @@ async def change_password(request: PasswordChangeRequest):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # @router.post("/forgot-password", tags=["User"])
 # async def forgot_password(request: ForgotPasswordRequest):
 #     email = request.email  # Extract email from request body
