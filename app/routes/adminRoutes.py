@@ -3,6 +3,12 @@ from ..models.adminmodel import LoginResponse , ForgotPasswordRequest , Validate
 from ..controllers.adminControllers import verify_admin , get_current_user
 from ..config.admindatabase import adminlogininfo , VehicleData , Vehiclecollection
 
+from fastapi.encoders import jsonable_encoder
+from fastapi import APIRouter, HTTPException, status
+import random
+import requests
+
+router = APIRouter()
 from fastapi import HTTPException, status
 import bcrypt
 import random 
@@ -25,10 +31,16 @@ from fastapi import APIRouter
 from typing import List, Dict, Any
 
 
-
+# 8bcfc44f5850f6fae91803902df32139-3724298e-62508b4b
 
 router = APIRouter()
 
+
+
+@router.get('/')
+async def home():
+    # send_simple_message()
+    return {'msg': 'Welcome in my api'}
 
 @router.post("/adminlogin", response_model=LoginResponse, tags=["Admin"])
 async def login_admin(email: str, password: str):
@@ -41,7 +53,7 @@ async def login_admin(email: str, password: str):
     return result    
 
 
-otp_storage: Dict[str, Tuple[str, datetime]] = {}
+# otp_storage: Dict[str, Tuple[str, datetime]] = {}
 
 @router.post("/admin-forgot-password", tags=["Admin"])
 async def forgot_password(request: ForgotPasswordRequest):
@@ -52,11 +64,12 @@ async def forgot_password(request: ForgotPasswordRequest):
     # Generate a 6-digit OTP
     otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
     print(f"Generated OTP: {otp}")
+
     # Email configuration
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587
     from_email = 'prixihelpcentre@gmail.com'
-    from_password = "ckyh ylky jhhu nopi"   # Use environment variable for the password
+    from_password = "jgtn fvsj ymuc wzje"   # Use environment variable for the password
     # Send OTP via email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -72,31 +85,69 @@ async def forgot_password(request: ForgotPasswordRequest):
     except Exception as e:
         print(f"Failed to send email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send OTP email.")
-    # Store OTP and its expiry time in memory
-    otp_expiry = datetime.utcnow() + timedelta(minutes=1)  # OTP valid for 2 minutes
-    otp_storage[email] = (otp, otp_expiry)
+    # Store OTP and its expiry time in the user's document in MongoDB
+    otp_expiry = datetime.utcnow() + timedelta(minutes=2)  # OTP valid for 2 minutes
+    await adminlogininfo.update_one(
+        {"email": email},
+        {"$set": {"otp": {"code": otp, "expiry": otp_expiry}}}
+    )
     return {"message": "OTP sent successfully."}
 
 
-@router.post("/admin-validate-otp", tags=["Admin"])
+
+@router.post("/admin-validate-otp", tags=["User"])
 async def validate_otp(request: ValidateOTPRequest):
     email = request.email
     entered_otp = request.otp
 
-    # Check if OTP exists and has not expired
-    stored_otp, otp_expiry = otp_storage.get(email, (None, None))
-    if stored_otp is None or otp_expiry is None:
+    # Fetch the user document
+    user = await adminlogininfo.find_one({"email": email})
+    
+    if user is None or "otp" not in user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not generated or expired.")
+    
+    # Extract OTP and expiry time from the user document
+    stored_otp = user["otp"]["code"]
+    otp_expiry = user["otp"]["expiry"]
+
     if datetime.utcnow() > otp_expiry:
         # OTP expired
-        otp_storage.pop(email, None)  # Remove expired OTP
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
+    
     if stored_otp != entered_otp:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP is not correct.")
+    
     print("OTP MATCHES")
+    
     # Optionally, clear the OTP after successful validation
-    otp_storage.pop(email, None)
+    await adminlogininfo.update_one(
+        {"email": email},
+        {"$unset": {"otp": ""}}  # Remove the otp field from the document
+    )
     return {"message": "OTP validated successfully."}
+
+
+
+
+# @router.post("/admin-validate-otp", tags=["Admin"])
+# async def validate_otp(request: ValidateOTPRequest):
+#     email = request.email
+#     entered_otp = request.otp
+
+#     # Check if OTP exists and has not expired
+#     stored_otp, otp_expiry = otp_storage.get(email, (None, None))
+#     if stored_otp is None or otp_expiry is None:
+#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not generated or expired.")
+#     if datetime.utcnow() > otp_expiry:
+#         # OTP expired
+#         otp_storage.pop(email, None)  # Remove expired OTP
+#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
+#     if stored_otp != entered_otp:
+#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP is not correct.")
+#     print("OTP MATCHES")
+#     # Optionally, clear the OTP after successful validation
+#     otp_storage.pop(email, None)
+#     return {"message": "OTP validated successfully."}
 
 
 @router.post("/admin-change-password", tags=["Admin"])
@@ -120,21 +171,6 @@ async def change_password(request: PasswordChangeRequest):
 async def protected_route(current_user: str = Depends(get_current_user)):
     # Your protected code here
     return {"message": "This is a protected route", "current_user": current_user}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -166,24 +202,6 @@ async def get_brand_model(brand_name: str, model_name: str):
         return {"model": model}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching model: {e}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

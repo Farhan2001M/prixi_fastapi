@@ -131,16 +131,20 @@ otp_storage: Dict[str, Tuple[str, datetime]] = {}
 async def forgot_password(request: ForgotPasswordRequest):
     email = request.email
     user = await signupcollectioninfo.find_one({"email": email})
+    
     if user is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not registered.")
+    
     # Generate a 6-digit OTP
     otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
     print(f"Generated OTP: {otp}")
+    
     # Email configuration
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587
     from_email = 'prixihelpcentre@gmail.com'
-    from_password = "ckyh ylky jhhu nopi"   # Use environment variable for the password
+    from_password = "jgtn fvsj ymuc wzje"  # Use environment variable for the password
+
     # Send OTP via email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -156,12 +160,15 @@ async def forgot_password(request: ForgotPasswordRequest):
     except Exception as e:
         print(f"Failed to send email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send OTP email.")
-    # Store OTP and its expiry time in memory
-    otp_expiry = datetime.utcnow() + timedelta(minutes=1)  # OTP valid for 2 minutes
-    otp_storage[email] = (otp, otp_expiry)
+
+    # Store OTP and its expiry time in the user's document in MongoDB
+    otp_expiry = datetime.utcnow() + timedelta(minutes=2)  # OTP valid for 2 minutes
+    
+    await signupcollectioninfo.update_one(
+        {"email": email},
+        {"$set": {"otp": {"code": otp, "expiry": otp_expiry}}}
+    )
     return {"message": "OTP sent successfully."}
-
-
 
 
 @router.post("/validate-otp", tags=["User"])
@@ -169,20 +176,31 @@ async def validate_otp(request: ValidateOTPRequest):
     email = request.email
     entered_otp = request.otp
 
-    # Check if OTP exists and has not expired
-    stored_otp, otp_expiry = otp_storage.get(email, (None, None))
-    if stored_otp is None or otp_expiry is None:
+    # Fetch the user document
+    user = await signupcollectioninfo.find_one({"email": email})
+    
+    if user is None or "otp" not in user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not generated or expired.")
+    
+    # Extract OTP and expiry time from the user document
+    stored_otp = user["otp"]["code"]
+    otp_expiry = user["otp"]["expiry"]
+
     if datetime.utcnow() > otp_expiry:
         # OTP expired
-        otp_storage.pop(email, None)  # Remove expired OTP
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
+    
     if stored_otp != entered_otp:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP is not correct.")
+    
     print("OTP MATCHES")
+    
     # Optionally, clear the OTP after successful validation
-    otp_storage.pop(email, None)
-
+    await signupcollectioninfo.update_one(
+        {"email": email},
+        {"$unset": {"otp": ""}}  # Remove the otp field from the document
+    )
+    
     return {"message": "OTP validated successfully."}
 
 
@@ -217,47 +235,3 @@ async def change_password(request: PasswordChangeRequest):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# @router.post("/forgot-password", tags=["User"])
-# async def forgot_password(request: ForgotPasswordRequest):
-#     email = request.email  # Extract email from request body
-#     user = await signupcollectioninfo.find_one({"email": email})
-#     if user is None:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not registered.")
-    
-#     # Generate OTP and send via email (or any other service)
-#     otp = generate_otp()
-#     # Store OTP in the database or cache (and set expiry)
-#     await signupcollectioninfo.update_one({"email": email}, {"$set": {"otp": otp}})
-#     return {"message": "OTP sent successfully."}
-
-
-# @router.post("/forgotemailcheck",  tags=["User"])
-# async def forgotemailcheck(email: str):
-#     result = await verify_email(email)    
-#     # Handle the different failure cases by raising HTTP exceptions
-#     if result == "email_not_registered":
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not registered.")
-#     return {"email": result} 
