@@ -3,6 +3,7 @@ from ..models.VehiclesModel import VehicleRequest
 from ..config.VehicleDatabase import collection 
 from ..controllers.VehicleControllers import get_new_id
 from ..controllers.userSignupControllers import create_user , verify_user , get_current_user , get_user_by_email 
+from ..config.usersdatabase import signupcollectioninfo 
 
 from fastapi import Depends
 router = APIRouter()
@@ -132,11 +133,10 @@ async def post_comment(
     brand_name: str,
     model_name: str,
     comment_data: CommentRequest,
-    current_user: str = Depends(get_current_user)  # Assuming current_user gets user's email from token
+    current_user: str = Depends(get_current_user)  
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
     # Create a new comment
     comment = {
         "commentId": str(uuid.uuid4()),  # Generate unique comment ID
@@ -146,10 +146,8 @@ async def post_comment(
         "timestamp": datetime.utcnow().isoformat(),  # Timestamp in ISO format
         "replies": []  # Initialize with no replies
     }
-
     # Add comment to the model
     update_result = await add_comment_to_model(brand_name, model_name, comment)
-
     if update_result.modified_count == 1:
         return {"message": "Comment added successfully"}
     else:
@@ -162,8 +160,7 @@ async def remove_comment_from_model(brand_name: str, model_name: str, comment_id
     # Find the document with the matching brand and model
     result = await collection.find_one(
         {"brandName": brand_name, "models.modelName": model_name},
-        {"models.$": 1}
-    )
+        {"models.$": 1} )
     if not result:
         raise HTTPException(status_code=404, detail="Brand or model not found")
     # Get the specific model's comments
@@ -181,8 +178,7 @@ async def remove_comment_from_model(brand_name: str, model_name: str, comment_id
     # Update the comments array after deletion
     update_result = await collection.update_one(
         {"brandName": brand_name, "models.modelName": model_name},
-        {"$set": {"models.$.comments": comments}}
-    )
+        {"$set": {"models.$.comments": comments}} )
     if update_result.modified_count == 1:
         return {"message": "Comment deleted successfully"}
     else:
@@ -194,24 +190,19 @@ async def delete_comment(brand_name: str, model_name: str, comment_id: str, curr
     return await remove_comment_from_model(brand_name, model_name, comment_id, current_user)
 
 
-
 @router.get("/check-comment-owner/{brand_name}/{model_name}/{comment_id}", tags=["Comments"])
 async def check_comment_owner(brand_name: str, model_name: str, comment_id: str, current_user: str = Depends(get_current_user)):
     # Find the document with the matching brand and model
     result = await collection.find_one(
         {"brandName": brand_name, "models.modelName": model_name},
-        {"models.$": 1}
-    )
+        {"models.$": 1} )
     if not result:
         raise HTTPException(status_code=404, detail="Brand or model not found")
-
     model = result["models"][0]
     comments = model.get("comments", [])
-    
     for comment in comments:
         if comment["commentId"] == comment_id:
             return {"isOwner": comment["userEmail"] == current_user}
-
     raise HTTPException(status_code=404, detail="Comment not found")
 
 
@@ -221,22 +212,17 @@ async def edit_comment(
     model_name: str,
     comment_id: str,
     comment_data: CommentRequest,
-    current_user: str = Depends(get_current_user)
-):
+    current_user: str = Depends(get_current_user) ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
     # Find the document with the matching brand and model
     result = await collection.find_one(
         {"brandName": brand_name, "models.modelName": model_name},
-        {"models.$": 1}
-    )
+        {"models.$": 1} )
     if not result:
         raise HTTPException(status_code=404, detail="Brand or model not found")
-
     model = result["models"][0]
     comments = model.get("comments", [])
-    
     # Check if the comment exists and if the current user is the owner
     for comment in comments:
         if comment["commentId"] == comment_id:
@@ -247,13 +233,11 @@ async def edit_comment(
             break
     else:
         raise HTTPException(status_code=404, detail="Comment not found")
-
     # Update the comments array after editing
     update_result = await collection.update_one(
         {"brandName": brand_name, "models.modelName": model_name},
         {"$set": {"models.$.comments": comments}}  # Make sure this correctly updates the array
     )
-    
     if update_result.modified_count == 1:
         return {"message": "Comment updated successfully"}
     else:
@@ -357,13 +341,10 @@ async def check_reply_owner(
         {"brandName": brand_name, "models.modelName": model_name},
         {"models.$": 1}  # Project only the specific model data
     )
-    
     if not result:
         raise HTTPException(status_code=404, detail="Brand or model not found")
-
     model = result["models"][0]
     comments = model.get("comments", [])
-
     # Locate the comment with the matching comment_id
     for comment in comments:
         if comment["commentId"] == comment_id:
@@ -373,7 +354,6 @@ async def check_reply_owner(
                     # Return whether the current user is the owner of the reply
                     return {"isOwner": reply["userEmail"] == current_user}
             raise HTTPException(status_code=404, detail="Reply not found")
-    
     raise HTTPException(status_code=404, detail="Comment not found")
 
 
@@ -434,7 +414,6 @@ async def edit_reply(
         raise HTTPException(status_code=500, detail="Failed to update the reply")
 
 
-
 @router.get("/user/email")
 async def get_user_email(current_user: str = Depends(get_current_user)):
     return {"email": current_user}
@@ -452,13 +431,10 @@ async def like_comment(
         {"brandName": brand_name, "models.modelName": model_name},
         {"models.$": 1}  # Only project the models array
     )
-
     if not result:
         raise HTTPException(status_code=404, detail="Brand or model not found")
-
     model = result["models"][0]
     comments = model.get("comments", [])
-
     for comment in comments:
         if comment["commentId"] == comment_id:
             # Check if the current user has already liked the comment
@@ -484,6 +460,158 @@ async def like_comment(
     raise HTTPException(status_code=404, detail="Comment not found")
 
 
+# Model for the favorite vehicle
+class FavoriteVehicle(BaseModel):
+    brandName: str
+    modelName: str
+
+@router.get("/favorites", tags=["Favorites"])
+async def get_favorites(current_user: str = Depends(get_current_user)):
+    user = await signupcollectioninfo.find_one({"email": current_user}, {"favorites": 1})
+    if not user:
+        return {"favorites": []}
+    return {"favorites": user.get("favorites", [])}
+
+
+@router.post("/favorites/add", tags=["Favorites"])
+async def add_to_favorites(favorite: FavoriteVehicle, current_user: str = Depends(get_current_user)):
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing_favorites = user.get("favorites", [])
+    for fav in existing_favorites:
+        if fav["modelName"] == favorite.modelName and fav["brandName"] == favorite.brandName:
+            raise HTTPException(status_code=400, detail="Vehicle already in favorites")
+    await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$push": {"favorites": favorite.dict()}}
+    )
+    return {"message": "Vehicle added to favorites"}
+
+@router.post("/favorites/remove", tags=["Favorites"])
+async def remove_from_favorites(favorite: FavoriteVehicle, current_user: str = Depends(get_current_user)):
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$pull": {"favorites": {"modelName": favorite.modelName, "brandName": favorite.brandName}}} )
+    return {"message": "Vehicle removed from favorites"}
+
+
+# Endpoint to return full details of favorited vehicles (for the favorites page)
+@router.get("/favorites/details", tags=["Favorites"])
+async def get_detailed_favorites(current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Fetch the user's favorites from their document
+    user = await signupcollectioninfo.find_one({"email": current_user}, {"favorites": 1})
+    if not user or "favorites" not in user:
+        return {"favorites": []}
+    # Prepare a list to store full vehicle details for each favorite
+    favorite_details = []
+    # Iterate over user's favorites and fetch details from Vehicles collection
+    for favorite in user["favorites"]:
+        vehicle = await collection.find_one(
+            {"brandName": favorite["brandName"], "models.modelName": favorite["modelName"]},
+            {"models.$": 1, "brandName": 1}  # Fetch only the matched model and brand name
+        )
+        if vehicle and "models" in vehicle:
+            favorite_details.append({
+                "brandName": vehicle["brandName"],
+                "model": vehicle["models"][0]  # Since we fetched with the $ operator, this will be the exact model
+            })
+    return {"favorites": favorite_details}
+
+
+
+
+
+
+class TrackVisitModel(BaseModel):
+    brandName: str
+    modelName: str
+    vehicleType: str  # One of: Sedan, SUV, Coupe, Hatchback, Pickup-Truck
+    engineType: str   # One of: Petrol, Diesel, Hybrid, Electric
+    price: Optional[float] = 0.0  # Price of the model
+    horsepower: Optional[float] = 0.0  # Horsepower of the model
+    torque: Optional[float] = 0.0  # Torque of the model
+    year: int  # Year of the model
+
+@router.post("/track-visit", tags=["Statistics"])
+async def track_visit(data: TrackVisitModel, current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Find the user's document
+    user = await signupcollectioninfo.find_one({"email": current_user})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Initialize the statistics attribute if it doesn't exist
+    if "statistics" not in user:
+        user["statistics"] = {
+            "totalVisitedCards": 0,
+            "cumulativePrice": 0.0,
+            "averagePrice": 0.0,
+            "cumulativeHorsepower": 0.0,
+            "averageHorsepower": 0.0,
+            "cumulativeTorque": 0.0,
+            "averageTorque": 0.0,
+            "uniqueVisitedModels": [],
+            "VehicleTypesVisited": {},
+            "EngineTypesVisited": {},
+            "brandVisited": {},
+            "yearRangesVisited": {}  # New attribute for year ranges
+        }
+
+    stats = user["statistics"]
+
+    # 1. Increment total visited cards count
+    stats["totalVisitedCards"] += 1
+    
+    # 2. Track unique visits
+    model_identifier = f"{data.brandName}_{data.modelName}"
+    if model_identifier not in stats["uniqueVisitedModels"]:
+        stats["uniqueVisitedModels"].append(model_identifier)
+
+        # Update cumulative values and calculate averages
+        stats["cumulativePrice"] += data.price
+        stats["averagePrice"] = stats["cumulativePrice"] / len(stats["uniqueVisitedModels"])
+
+        # Only update cumulative horsepower and torque if provided
+        if data.horsepower:
+            stats["cumulativeHorsepower"] += data.horsepower
+            stats["averageHorsepower"] = stats["cumulativeHorsepower"] / len(stats["uniqueVisitedModels"])
+        if data.torque:
+            stats["cumulativeTorque"] += data.torque
+            stats["averageTorque"] = stats["cumulativeTorque"] / len(stats["uniqueVisitedModels"])
+
+    # 3. Track Vehicle Types Visited
+    stats["VehicleTypesVisited"][data.vehicleType] = stats["VehicleTypesVisited"].get(data.vehicleType, 0) + 1
+
+    # 4. Track Engine Types Visited
+    stats["EngineTypesVisited"][data.engineType] = stats["EngineTypesVisited"].get(data.engineType, 0) + 1
+
+    # 5. Track Brand Visits
+    stats["brandVisited"][data.brandName] = stats["brandVisited"].get(data.brandName, 0) + 1
+
+    # 6. Track Year Range Visited
+    year_range_start = (data.year // 5) * 5
+    year_range_end = year_range_start + 5
+    year_range_key = f"{year_range_start}-{year_range_end}"
+
+    stats["yearRangesVisited"][year_range_key] = stats["yearRangesVisited"].get(year_range_key, 0) + 1
+
+    # Save the updated statistics back to the database
+    await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$set": {"statistics": stats}}
+    )
+
+    return {"message": "Visit tracked successfully"}
 
 
 
@@ -491,3 +619,18 @@ async def like_comment(
 
 
 
+
+
+
+
+
+
+
+
+
+
+# def determine_year_range(year: int) -> str:
+#     """Determine the 5-year range for a given year."""
+#     start_year = (year // 5) * 5
+#     end_year = start_year + 4
+#     return f"{start_year}-{end_year}"

@@ -36,11 +36,10 @@ from typing import List, Dict, Any
 router = APIRouter()
 
 
-
 @router.get('/')
 async def home():
     # send_simple_message()
-    return {'msg': 'Welcome in my api'}
+    return {'msg': 'Welcome in my api'} 
 
 @router.post("/adminlogin", response_model=LoginResponse, tags=["Admin"])
 async def login_admin(email: str, password: str):
@@ -95,7 +94,7 @@ async def forgot_password(request: ForgotPasswordRequest):
 
 
 
-@router.post("/admin-validate-otp", tags=["User"])
+@router.post("/admin-validate-otp", tags=["Admin"])
 async def validate_otp(request: ValidateOTPRequest):
     email = request.email
     entered_otp = request.otp
@@ -215,6 +214,17 @@ async def add_vehicle_brand(brand: Brand):
     return {"message": "Brand added successfully."}
 
 
+# @router.post("/addvehiclebrand")
+# async def add_vehicle_brand(brand: Brand):
+#     brand_name_lower = brand.brandName.lower()
+#     existing_brand = await Vehiclecollection.find_one({"brandName": brand_name_lower})
+#     if existing_brand:
+#         raise HTTPException(status_code=400, detail="Brand already exists.")
+#     new_brand = {"brandName": brand_name_lower,  "models": [] }
+#     await Vehiclecollection.insert_one(new_brand)
+#     return {"message": "Brand added successfully."}
+
+
 @router.post("/addVehiclemodel")
 async def add_vehicle_model(brand_name: str, model: VehicleModel, images: List[UploadFile] = File(...)):
     # Find the brand in the database
@@ -256,15 +266,6 @@ async def get_vehicles():
 
 
 
-@router.post("/addvehiclebrand")
-async def add_vehicle_brand(brand: Brand):
-    brand_name_lower = brand.brandName.lower()
-    existing_brand = await Vehiclecollection.find_one({"brandName": brand_name_lower})
-    if existing_brand:
-        raise HTTPException(status_code=400, detail="Brand already exists.")
-    new_brand = {"brandName": brand_name_lower,  "models": [] }
-    await Vehiclecollection.insert_one(new_brand)
-    return {"message": "Brand added successfully."}
 
 
 @router.get("/getBrandData/{brand_name}", response_model=Optional[BrandModel])

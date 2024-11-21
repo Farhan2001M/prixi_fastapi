@@ -17,6 +17,7 @@ class CarInput(BaseModel):
     miles: int
     trim: str
 
+
 # Price prediction endpoint
 @router.post("/pricepredict", tags=["Price prediction"])
 def predict_price(input_data: CarInput):

@@ -54,6 +54,16 @@ class VehicleModel:
 
 
 
+
+# Request body model
+class DeleteModelRequest(BaseModel):
+    brandName: str
+    modelName: str
+
+
+
+
+
 # Request model to get specific model info
 class ModelRequest(BaseModel):
     brand_name: str
@@ -159,13 +169,6 @@ class VehicleModel(BaseModel):
 
 
 
-
-
-
-# Request body model
-class DeleteModelRequest(BaseModel):
-    brandName: str
-    modelName: str
 
 
 

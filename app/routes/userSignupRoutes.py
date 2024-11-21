@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from ..models.usersmodel import User , LoginResponse , UserDetailsResponse , UpdateUserRequest , ForgotPasswordRequest , ValidateOTPRequest , PasswordChangeRequest
 from ..config.usersdatabase import signupcollectioninfo 
-from ..controllers.userSignupControllers import create_user , verify_user , get_current_user , get_user_by_email 
+from ..controllers.userSignupControllers import create_user , verify_user , get_current_user , get_user_by_email , generate_initials_image
 
 from fastapi import Depends, HTTPException, status
 import base64
@@ -16,8 +16,12 @@ from email.message import EmailMessage
 from typing import Dict, Tuple
 import bcrypt
 
+from fastapi.responses import JSONResponse
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 router = APIRouter()
+
 
 
 
@@ -80,25 +84,60 @@ async def upload_image(image: UploadFile = File(...), current_user: str = Depend
     return {"message": "Image uploaded successfully"}
 
 
-@router.post("/remove-image" , tags=["Profile Update"])
+# @router.post("/remove-image" , tags=["Profile Update"])
+# async def remove_image(current_user: str = Depends(get_current_user)):
+#     # Remove the image field from the user's document
+#     result = await signupcollectioninfo.update_one(
+#         {"email": current_user},
+#         {"$unset": {"image": ""}} )
+#     if result.modified_count == 0:
+#         raise HTTPException(status_code=404, detail="User not found or image not removed")
+#     return {"message": "Image removed successfully"}
+
+
+@router.post("/remove-image", tags=["Profile Update"])
 async def remove_image(current_user: str = Depends(get_current_user)):
-    # Remove the image field from the user's document
+    # Remove the custom image field from the user's document
     result = await signupcollectioninfo.update_one(
         {"email": current_user},
-        {"$unset": {"image": ""}} )
+        {"$unset": {"image": ""}}
+    )
+    
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found or image not removed")
-    return {"message": "Image removed successfully"}
+
+    # Fetch the stored initials image (`GenImage`) for this user
+    user = await signupcollectioninfo.find_one({"email": current_user}, {"GenImage": 1})
+    if user is None or "GenImage" not in user:
+        raise HTTPException(status_code=404, detail="Initials image not found for this user")
+
+    # Return the success message and the stored initials image
+    return {"message": "Image removed successfully", "GenImage": user["GenImage"]}
 
 
-@router.get("/user-image" , tags=["Profile Update"] )
+@router.get("/user-image", tags=["Profile Update"])
 async def get_user_image(current_user: str = Depends(get_current_user)):
-    user = await signupcollectioninfo.find_one({"email": current_user}, {"image": 1})
+    user = await signupcollectioninfo.find_one({"email": current_user}, {"firstName": 1, "lastName": 1, "image": 1})
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    # Return the image field, if present
-    image = user.get("image", None)
-    return {"image": image}
+    # Retrieve the custom image if it exists; otherwise, provide GenImage
+    custom_image = user.get("image", None)
+    gen_image = user.get("GenImage") or generate_initials_image(user["firstName"], user["lastName"])
+    return {"image": custom_image, "GenImage": gen_image, "imageType": "png"}
+
+
+
+# @router.get("/user-image", tags=["Profile Update"])
+# async def get_user_image(current_user: str = Depends(get_current_user)):
+#     user = await signupcollectioninfo.find_one({"email": current_user}, {"firstName": 1, "lastName": 1, "image": 1})
+#     if user is None:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     # Check if a custom image is set; if not, generate initials-based image
+#     image = user.get("image", None)
+#     if image is None:
+#         # Generate initials image if no custom image is set
+#         image = generate_initials_image(user["firstName"], user["lastName"])
+#     return {"image": image, "imageType": "png"}  # Specify that this is a PNG image
 
 
 
@@ -108,6 +147,7 @@ async def get_full_user_info(current_user: str = Depends(get_current_user)):
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
 
 
 @router.post("/updateuser" , tags=["Profile Update"])
@@ -122,10 +162,7 @@ async def update_user_details( update_data: UpdateUserRequest, current_user: str
         raise HTTPException(status_code=404, detail="User not found.")
     return {"message": "User details updated successfully"}
 
-
-
 otp_storage: Dict[str, Tuple[str, datetime]] = {}
-
 
 @router.post("/forgot-password", tags=["User"])
 async def forgot_password(request: ForgotPasswordRequest):

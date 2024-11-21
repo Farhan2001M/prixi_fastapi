@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List , Optional
 
 
 class User(BaseModel):
@@ -9,7 +9,7 @@ class User(BaseModel):
     phoneNumber: str
     password: str
     image: Optional[str] = None  # Default to None if not provided  # Base64 encoded image string
-
+    favorites: Optional[List[dict]] = []  # To store user's favorite vehicles
 
 class LoginResponse(BaseModel):
     token: str
