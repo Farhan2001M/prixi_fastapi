@@ -9,7 +9,6 @@ from ..config.usersdatabase import signupcollectioninfo
 from ..controllers.userSignupControllers import get_current_user  
 from ..config.admindatabase import Vehiclecollection
 import logging
-import traceback
 from sklearn.preprocessing import normalize
 from collections import Counter
 from sklearn.preprocessing import normalize
@@ -130,9 +129,20 @@ async def vectorize_vehicles():
 
 
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -202,7 +212,7 @@ def calculate_attribute_match(user_favorites: List[Dict], vehicle_info: Dict) ->
         'vehicleType': 0.15,
         'engineType': 0.15,
         'year': 0.15,
-        'color': 0.10,
+        'colors': 0.10,
         'seatingCapacity': 0.10,
         'horsepower': 0.05,
         'torque': 0.05
@@ -222,14 +232,16 @@ def calculate_attribute_match(user_favorites: List[Dict], vehicle_info: Dict) ->
         attribute_score += weight_factors['vehicleType']
     if vehicle_info['engineType'] == avg_engine_type:
         attribute_score += weight_factors['engineType']
-    if vehicle_info['color'] == avg_color:
-        attribute_score += weight_factors['color']
+    if vehicle_info['colors'] == avg_color:
+        attribute_score += weight_factors['colors']
     
     # Handle the 'year' comparison
     if avg_year > 0:
         attribute_score += weight_factors['year'] * (1 - abs(vehicle_info['year'] - avg_year) / avg_year)
     
     return attribute_score
+
+
 
 # Function to calculate final score combining cosine similarity and attribute match score
 def calculate_final_score(cosine_sim: float, attribute_match_score: float, num_favorites: int) -> float:
@@ -241,7 +253,7 @@ def calculate_final_score(cosine_sim: float, attribute_match_score: float, num_f
 def get_top_common_types(user_favorites: List[Dict], top_n: int = 3) -> List[str]:
     vehicle_types = [fav.get('vehicleType', '') for fav in user_favorites]
     engine_types = [fav.get('engineType', '') for fav in user_favorites]
-    colors = [fav.get('color', '') for fav in user_favorites]
+    colors = [fav.get('colors', '') for fav in user_favorites]
     
     # Count most common vehicle types, engine types, and colors
     common_vehicle_types = [item[0] for item in Counter(vehicle_types).most_common(top_n)]
@@ -260,6 +272,7 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
             raise HTTPException(status_code=404, detail="User not found or no favorites found")
         
         user_favorites = user["favorites"]
+        logger.info(f"User found: {user['email']} with {len(user_favorites)} favorites.")
         
         # Get the top N most common vehicle and engine types and colors from favorites
         top_vehicle_types, top_engine_types, top_colors = get_top_common_types(user_favorites)
@@ -273,19 +286,23 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
             })
             if vehicle:
                 model = next((m for m in vehicle["models"] if m["modelName"] == favorite["modelName"]), None)
-                favorite_vehicle_vectors.append({
-                    "brandName": favorite["brandName"],
-                    "modelName": favorite["modelName"],
-                    "vector": model["vector"],
-                    "launchPrice": model.get("launchPrice", 0),
-                    "horsepower": model.get("horsepower", 0),
-                    "torque": model.get("torque", 0),
-                    "seatingCapacity": model.get("seatingCapacity", 0),
-                    "year": model.get("year", 0),
-                    "vehicleType": model.get("vehicleType", ""),
-                    "engineType": model.get("engineType", ""),
-                    "color": model.get("color", "")
-                })
+                if model:
+                    favorite_vehicle_vectors.append({
+                        "brandName": favorite["brandName"],
+                        "modelName": favorite["modelName"],
+                        "vector": model["vector"],
+                        "launchPrice": model.get("launchPrice", 0),
+                        "horsepower": model.get("horsepower", 0),
+                        "torque": model.get("torque", 0),
+                        "seatingCapacity": model.get("seatingCapacity", 0),
+                        "year": model.get("year", 0),
+                        "vehicleType": model.get("vehicleType", ""),
+                        "engineType": model.get("engineType", ""),
+                        "colors": model.get("colors", "")
+                    })
+                    logger.info(f"Processed vehicle {favorite['brandName']} {favorite['modelName']}.")
+                else:
+                    logger.warning(f"Model not found for {favorite['brandName']} {favorite['modelName']}.")
         
         # Create user profile vector (average of favorite vectors)
         user_profile_vector = create_user_profile(favorite_vehicle_vectors)
@@ -294,7 +311,6 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
         vehicles_cursor = Vehiclecollection.find()
         all_vehicles = await vehicles_cursor.to_list(length=None)
         
-        similarities = []
         vehicle_scores = []
         
         for vehicle in all_vehicles:
@@ -310,12 +326,14 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
                     final_score = calculate_final_score(cosine_sim, attribute_match_score, len(user_favorites))
                     
                     # Check if vehicle matches top vehicle types or engine types or color
-                    if model['vehicleType'] not in top_vehicle_types or model['engineType'] not in top_engine_types or model['color'] not in top_colors:
+                    if model['vehicleType'] not in top_vehicle_types or model['engineType'] not in top_engine_types or model['colors'] not in top_colors:
                         final_score -= 0.1  # Slight penalty for not matching top types
                     
                     vehicle_scores.append({
                         "brandName": vehicle["brandName"],
                         "modelName": model["modelName"],
+                        "launchPrice": model.get("launchPrice", 0), 
+                        "images": model.get("images", []), 
                         "finalScore": final_score,
                         "cosineSimilarity": cosine_sim,
                         "attributeMatchScore": attribute_match_score
@@ -336,17 +354,6 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
     
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
+        logger.error(error_message)
         raise HTTPException(status_code=500, detail=error_message)
-
-
-
-
-
-
-
-
-
-
-
-
 

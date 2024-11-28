@@ -9,7 +9,8 @@ from fastapi import UploadFile, File
 import logging
 from fastapi import Request
 from datetime import datetime, timedelta
-
+from typing import List
+from pydantic import BaseModel
 import random 
 import smtplib
 from email.message import EmailMessage
@@ -148,8 +149,6 @@ async def get_full_user_info(current_user: str = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-
-
 @router.post("/updateuser" , tags=["Profile Update"])
 async def update_user_details( update_data: UpdateUserRequest, current_user: str = Depends(get_current_user) ):
     update_fields = {key: value for key, value in update_data.dict().items() if value is not None}
@@ -161,6 +160,59 @@ async def update_user_details( update_data: UpdateUserRequest, current_user: str
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found.")
     return {"message": "User details updated successfully"}
+
+
+class UpdateSearchRequest(BaseModel):
+    searchTerm: str  # The term the user is searching for
+
+@router.get("/getsearchhistory", response_model=List[str], tags=["Search History"])
+async def get_search_history(current_user: str = Depends(get_current_user)):
+    user = await get_user_by_email(current_user)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user.get("searches", [])  # Return user's search history (up to 3 searches)
+
+@router.post("/updatesearchhistory", tags=["Search History"])
+async def update_search_history(update_data: UpdateSearchRequest, current_user: str = Depends(get_current_user)):
+    user = await get_user_by_email(current_user)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Get current searches
+    current_searches = user.get("searches", [])
+    # Add the new search term, if not already in the list
+    new_search = update_data.searchTerm
+    # Remove the search if it's already in the list to avoid duplicates
+    current_searches = [search for search in current_searches if search != new_search]
+    # Add the new search term to the beginning of the list
+    current_searches.insert(0, new_search)
+    # Limit the search history to 3 entries
+    updated_searches = current_searches[:3]
+    # Update the user's search history
+    result = await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$set": {"searches": updated_searches}} )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")   
+    return {"message": "Search history updated successfully", "searches": updated_searches}
+
+@router.delete("/removesearchhistory/{search_term}", tags=["Search History"])
+async def remove_search_history(search_term: str, current_user: str = Depends(get_current_user)):
+    user = await get_user_by_email(current_user)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Get current searches
+    current_searches = user.get("searches", [])
+    # Remove the specified search term
+    updated_searches = [search for search in current_searches if search != search_term]
+    # Update the user's search history in the database
+    result = await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$set": {"searches": updated_searches}} )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"message": "Search history updated successfully", "searches": updated_searches}
+
+
 
 otp_storage: Dict[str, Tuple[str, datetime]] = {}
 
@@ -197,14 +249,11 @@ async def forgot_password(request: ForgotPasswordRequest):
     except Exception as e:
         print(f"Failed to send email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send OTP email.")
-
     # Store OTP and its expiry time in the user's document in MongoDB
     otp_expiry = datetime.utcnow() + timedelta(minutes=2)  # OTP valid for 2 minutes
-    
     await signupcollectioninfo.update_one(
         {"email": email},
-        {"$set": {"otp": {"code": otp, "expiry": otp_expiry}}}
-    )
+        {"$set": {"otp": {"code": otp, "expiry": otp_expiry}}} )
     return {"message": "OTP sent successfully."}
 
 
@@ -212,32 +261,24 @@ async def forgot_password(request: ForgotPasswordRequest):
 async def validate_otp(request: ValidateOTPRequest):
     email = request.email
     entered_otp = request.otp
-
     # Fetch the user document
     user = await signupcollectioninfo.find_one({"email": email})
-    
     if user is None or "otp" not in user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not generated or expired.")
-    
     # Extract OTP and expiry time from the user document
     stored_otp = user["otp"]["code"]
     otp_expiry = user["otp"]["expiry"]
-
     if datetime.utcnow() > otp_expiry:
         # OTP expired
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
-    
     if stored_otp != entered_otp:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP is not correct.")
-    
     print("OTP MATCHES")
-    
     # Optionally, clear the OTP after successful validation
     await signupcollectioninfo.update_one(
         {"email": email},
         {"$unset": {"otp": ""}}  # Remove the otp field from the document
     )
-    
     return {"message": "OTP validated successfully."}
 
 
