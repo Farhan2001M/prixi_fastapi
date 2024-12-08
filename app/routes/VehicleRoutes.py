@@ -12,9 +12,7 @@ from typing import List, Optional
 from bson import ObjectId
 from datetime import datetime
 import uuid
-
 import logging
-
 
 # POST route to save vehicle data
 @router.post("/save-vehicles")
@@ -522,16 +520,6 @@ async def add_to_favorites(favorite: FavoriteVehicle, current_user: str = Depend
         {"$push": {"favorites": favorite.dict()}} )
     return {"message": "Vehicle added to favorites"}
 
-@router.post("/favorites/remove", tags=["Favorites"])
-async def remove_from_favorites(favorite: FavoriteVehicle, current_user: str = Depends(get_current_user)):
-    user = await signupcollectioninfo.find_one({"email": current_user})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    await signupcollectioninfo.update_one(
-        {"email": current_user},
-        {"$pull": {"favorites": {"modelName": favorite.modelName, "brandName": favorite.brandName}}} )
-    return {"message": "Vehicle removed from favorites"}
-
 
 # Endpoint to return full details of favorited vehicles (for the favorites page)
 @router.get("/favorites/details", tags=["Favorites"])
@@ -556,6 +544,18 @@ async def get_detailed_favorites(current_user: str = Depends(get_current_user)):
                 "model": vehicle["models"][0]  # Since we fetched with the $ operator, this will be the exact model
             })
     return {"favorites": favorite_details}
+
+
+
+@router.post("/favorites/remove", tags=["Favorites"])
+async def remove_from_favorites(favorite: FavoriteVehicle, current_user: str = Depends(get_current_user)):
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await signupcollectioninfo.update_one(
+        {"email": current_user},
+        {"$pull": {"favorites": {"modelName": favorite.modelName, "brandName": favorite.brandName}}} )
+    return {"message": "Vehicle removed from favorites"}
 
 
 class TrackBrandVisitRequest(BaseModel):
@@ -720,34 +720,6 @@ async def post_anonymous_comment(
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @router.get("/user-overview", tags=["Statistics"])
 async def get_user_overview(current_user: str = Depends(get_current_user)):
     if not current_user:
@@ -808,8 +780,6 @@ async def get_user_overview(current_user: str = Depends(get_current_user)):
 
 
 
-# Configure logging to print to the terminal
-logging.basicConfig(level=logging.INFO)  # This will print INFO level logs to the console
 
 
 @router.get("/user-data-summary", tags=["User Data"])
@@ -857,10 +827,7 @@ async def get_user_data_summary(current_user: str = Depends(get_current_user)):
                     total_replies_received += 1  # Count replies received by the user
 
     # Log the results to the console (VS Code terminal)
-    logging.info(f"Total Comments: {total_comments}")
-    logging.info(f"Total Replies: {total_replies}")
-    logging.info(f"Total Replies Received: {total_replies_received}")
-    logging.info(f"Total Models: {total_models}")
+    logging.info(f"Total Comments: {total_comments} , Total Replies: {total_replies} , Total Replies Received: {total_replies_received} , Total Models: {total_models}")
 
     return {
         "totalComments": total_comments,
@@ -873,61 +840,105 @@ async def get_user_data_summary(current_user: str = Depends(get_current_user)):
 
 
 
-# @router.get("/user-data-summary", tags=["User Data"])
-# async def get_user_data_summary(current_user: str = Depends(get_current_user)):
-#     if not current_user:
-#         raise HTTPException(status_code=401, detail="Unauthorized")
-    
-#     # Initialize counters
-#     total_comments = 0
-#     total_replies = 0
-#     total_replies_received = 0
-#     total_models = 0
-
-#     # Aggregation Pipeline
-#     pipeline = [
-#         {"$unwind": "$models"},  # Unwind the models array to work with individual models
-#         {
-#             "$project": {
-#                 "models.comments": 1,  # Only include the comments array of each model
-#                 "models.comments.replies": 1,  # Include the replies array for each comment
-#                 "models.modelName": 1,  # Include the model name (if needed for context)
-#             }
-#         },
-#         {"$match": {}}  # No specific filter for brands/models; we want all vehicles
-#     ]
-    
-#     # Aggregate data for comments, replies, and vehicle models
-#     async for doc in collection.aggregate(pipeline):
-#         total_models += 1  # Each iteration represents a model in the collection
-        
-#         # Loop through each model's comments
-#         for comment in doc["models"].get("comments", []):
-#             # Count the comments made by the current user
-#             if comment.get("userEmail") == current_user:
-#                 total_comments += 1
-            
-#             # Loop through replies to count the ones posted by the user
-#             for reply in comment.get("replies", []):
-#                 if reply.get("userEmail") == current_user:
-#                     total_replies += 1  # Count replies posted by the user
-                
-#                 # Count replies the user received
-#                 if reply.get("userEmail") != current_user:
-#                     total_replies_received += 1  # Count replies received by the user
-
-#     return {
-#         "totalComments": total_comments,
-#         "totalReplies": total_replies,
-#         "totalRepliesReceived": total_replies_received,
-#         "totalModels": total_models
-#     }
 
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@router.get("/brand-visits-chart", tags=["Charts"])
+async def get_brand_visits_chart(current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Fetch the user document
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Extract brand visits
+    brand_visits = user.get("statistics", {}).get("brandVisited", {})
+    # Prepare the response
+    return {
+        "brands": list(brand_visits.keys()),  # X-axis labels
+        "visits": list(brand_visits.values())  # Y-axis values
+    }
+
+
+@router.get("/vehicle-types-donut", tags=["Charts"])
+async def get_vehicle_types_donut(current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Fetch the user document
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Extract vehicle type data
+    vehicle_types = user.get("statistics", {}).get("VehicleTypesVisited", {})
+    total_visits = sum(vehicle_types.values())
+    if total_visits == 0:
+        raise HTTPException(status_code=400, detail="No data available for Vehicle Types")
+    # Calculate percentages
+    percentages = {k: (v / total_visits) * 100 for k, v in vehicle_types.items()}
+    # Prepare the response
+    return {
+        "vehicleTypes": list(percentages.keys()),
+        "percentages": list(percentages.values())
+    }
+
+
+@router.get("/engine-types-donut", tags=["Charts"])
+async def get_engine_types_donut(current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Fetch the user document
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Extract engine type data
+    engine_types = user.get("statistics", {}).get("EngineTypesVisited", {})
+    total_visits = sum(engine_types.values())
+    if total_visits == 0:
+        raise HTTPException(status_code=400, detail="No data available for Engine Types")
+    # Calculate percentages
+    percentages = {k: (v / total_visits) * 100 for k, v in engine_types.items()}
+    # Prepare the response
+    return {
+        "engineTypes": list(percentages.keys()),
+        "percentages": list(percentages.values())
+    }
+
+
+
+@router.get("/year-ranges-chart", tags=["Charts"])
+async def get_year_ranges_chart(current_user: str = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Fetch the user document
+    user = await signupcollectioninfo.find_one({"email": current_user})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Extract year range data
+    year_ranges = user.get("statistics", {}).get("yearRangesVisited", {})
+    # Prepare the response
+    return {
+        "yearRanges": list(year_ranges.keys()),  # Y-axis labels
+        "visits": list(year_ranges.values())  # X-axis values
+    }
 
 
 

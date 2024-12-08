@@ -12,16 +12,21 @@ import logging
 from sklearn.preprocessing import normalize
 from collections import Counter
 from sklearn.preprocessing import normalize
+from ..config.VehicleDatabase import collection 
 
 router = APIRouter()
+
 
 # Initialize Word2Vec and Scaler
 word2vec_model = Word2Vec(vector_size=100, window=5, min_count=1, workers=4)
 scaler = MinMaxScaler()
 
+
 # Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
 
 # Helper function to preprocess and vectorize text data
 def vectorize_text(text: str) -> np.ndarray:
@@ -59,7 +64,7 @@ def normalize_numerical_data(data: List[float]) -> np.ndarray:
     normalized = scaler.fit_transform(np.array(data).reshape(-1, 1)).flatten()
     return normalized
 
-@router.get("/vehicles/vectorize")
+@router.get("/vehicles/vectorize" , tags=["Recommendation"])
 async def vectorize_vehicles():
     try:
         # Fetch all vehicles from the database
@@ -242,7 +247,6 @@ def calculate_attribute_match(user_favorites: List[Dict], vehicle_info: Dict) ->
     return attribute_score
 
 
-
 # Function to calculate final score combining cosine similarity and attribute match score
 def calculate_final_score(cosine_sim: float, attribute_match_score: float, num_favorites: int) -> float:
     cosine_weight = min(0.7 + (0.3 * (num_favorites / 10)), 0.9)  # Weight adjustment based on the number of favorites
@@ -262,8 +266,8 @@ def get_top_common_types(user_favorites: List[Dict], top_n: int = 3) -> List[str
     
     return common_vehicle_types, common_engine_types, common_colors
 
-# API endpoint for vehicle recommendations
-@router.get("/recommendations", response_model=List[Dict[str, Any]])
+
+@router.get("/recommendationsbyfavorites", response_model=List[Dict[str, Any]] , tags=["Recommendation"])
 async def get_recommended_vehicles(current_user: str = Depends(get_current_user)):
     try:
         # Fetch user and favorites
@@ -357,3 +361,243 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
         logger.error(error_message)
         raise HTTPException(status_code=500, detail=error_message)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Helper function to calculate score based on user's statistics
+def calculate_behavior_score(vehicle_info: Dict, user_stats: Dict) -> float:
+    score = 0
+
+    # Safe access to 'brandName', in case it's missing in the vehicle_info
+    brand_name = vehicle_info.get('brandName', '')
+    if brand_name:
+        brand_visited = user_stats.get('brandVisited', {})
+        brand_score = brand_visited.get(brand_name, 0)
+        score += brand_score * 0.3  # Weighting this factor
+
+    # Score based on vehicle type frequency
+    vehicle_type = vehicle_info.get('vehicleType', '')
+    if vehicle_type:
+        vehicle_types_visited = user_stats.get('VehicleTypesVisited', {})
+        vehicle_type_score = vehicle_types_visited.get(vehicle_type, 0)
+        score += vehicle_type_score * 0.2  # Weighting this factor
+
+    # Score based on engine type frequency
+    engine_type = vehicle_info.get('engineType', '')
+    if engine_type:
+        engine_types_visited = user_stats.get('EngineTypesVisited', {})
+        engine_type_score = engine_types_visited.get(engine_type, 0)
+        score += engine_type_score * 0.2  # Weighting this factor
+
+    # Score based on price range
+    price_range = vehicle_info.get('launchPrice', 0)
+    average_price = user_stats.get('averagePrice', 0)
+    if average_price > 0 and price_range > 0:
+        price_score = 1 - abs(price_range - average_price) / average_price
+        score += price_score * 0.1
+
+    # Score based on horsepower
+    horsepower_range = vehicle_info.get('horsepower', 0)
+    average_horsepower = user_stats.get('averageHorsepower', 0)
+    if average_horsepower > 0 and horsepower_range > 0:
+        horsepower_score = 1 - abs(horsepower_range - average_horsepower) / average_horsepower
+        score += horsepower_score * 0.1
+
+    # Score based on torque
+    torque_range = vehicle_info.get('torque', 0)
+    average_torque = user_stats.get('averageTorque', 0)
+    if average_torque > 0 and torque_range > 0:
+        torque_score = 1 - abs(torque_range - average_torque) / average_torque
+        score += torque_score * 0.1
+
+    return score
+
+# Route to get vehicle recommendations based on user behavior (click history)
+@router.get("/recommendationsbybehavior", response_model=List[Dict[str, Any]], tags=["Recommendation"])
+async def get_recommended_vehicles_based_on_behavior(current_user: str = Depends(get_current_user)):
+    try:
+        # Fetch user and statistics
+        user = await signupcollectioninfo.find_one({"email": current_user})
+        if not user or "statistics" not in user:
+            raise HTTPException(status_code=404, detail="User not found or no statistics found")
+
+        user_stats = user["statistics"]
+        logger.info(f"User found: {user['email']} with statistics data.")
+
+        # Fetch all vehicles and calculate behavior-based scores
+        vehicles_cursor = Vehiclecollection.find()
+        all_vehicles = await vehicles_cursor.to_list(length=None)
+
+        vehicle_scores = []
+
+        for vehicle in all_vehicles:
+            for model in vehicle["models"]:
+                # Check if the required fields exist
+                if "launchPrice" in model and "vehicleType" in model and "engineType" in model:
+                    behavior_score = calculate_behavior_score(model, user_stats)
+                    vehicle_scores.append({
+                        "brandName": vehicle.get("brandName", "Unknown Brand"),
+                        "modelName": model.get("modelName", "Unknown Model"),
+                        "launchPrice": model.get("launchPrice", 0),
+                        "horsepower": model.get("horsepower", 0),
+                        "torque": model.get("torque", 0),
+                        "images": model.get("images", []),
+                        "vehicleType": model.get("vehicleType", "Unknown Type"),
+                        "engineType": model.get("engineType", "Unknown Engine"),
+                        "finalScore": behavior_score,
+                    })
+
+        # Sort vehicles by final score (highest first)
+        vehicle_scores.sort(key=lambda x: x["finalScore"], reverse=True)
+
+        # Select top 3 recommendations
+        recommended_vehicles = vehicle_scores[:3]
+
+        for recommendation in recommended_vehicles:
+            logger.info(f"Recommended Vehicle: {recommendation['brandName']} {recommendation['modelName']}, "
+                        f"Score: {recommendation['finalScore']}")
+
+        return recommended_vehicles
+
+    except Exception as e:
+        error_message = f"An error occurred: {str(e)}"
+        logger.error(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@router.get("/trending-vehicles", tags=["Recommendation"])
+async def get_trending_vehicles():
+    # Fetch all users' uniqueVisitedModels
+    cursor = signupcollectioninfo.find({}, {"statistics.uniqueVisitedModels": 1})
+
+    all_visited_models = []
+
+    # Step 1: Collect all uniqueVisitedModels from users' statistics
+    async for user in cursor:
+        unique_visited_models = user.get("statistics", {}).get("uniqueVisitedModels", [])
+        all_visited_models.extend(unique_visited_models)
+
+    if not all_visited_models:
+        return {"message": "No models found"}
+
+    # Step 2: Count the frequency of each model and find the top 5 most visited models
+    model_counts = {}
+    for model in all_visited_models:
+        model_counts[model] = model_counts.get(model, 0) + 1
+
+    logging.info(f"Model counts are: {model_counts}")
+    
+    # Sort models by frequency and get the top 5
+    top_5_models = sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    # Step 3: Fetch details of these top 5 models from the Vehicles collection
+    trending_vehicles = []
+    for model, _ in top_5_models:
+        # Split model name to extract the brand name and model name
+        brand_name, model_name = model.split("_", 1)  # Assuming model name is in the format 'Brand_Model'
+
+        # Search for the model in the Vehicles collection under the corresponding brand
+        vehicle = await collection.find_one(
+            {"brandName": brand_name, "models.modelName": model_name},
+            {"models.$": 1, "brandName": 1}  # Fetch only the model and brand name
+        )
+
+        if vehicle:
+            # Find the model details within the brand
+            model_details = next((m for m in vehicle["models"] if m["modelName"] == model_name), None)
+            launch_price = model_details.get("launchPrice")  # Get the launchPrice
+            
+            if model_details:
+                # Get the first image from the images array
+                first_image = model_details.get("images", [])[0] if model_details.get("images") else None
+
+                trending_vehicles.append({
+                    "brandName": vehicle["brandName"],
+                    "modelName": model_name,
+                    "image": first_image,  # Add the first image of the model
+                    "launchPrice": launch_price  # Add the launch price
+                })
+
+    return {"trendingVehicles": trending_vehicles}
