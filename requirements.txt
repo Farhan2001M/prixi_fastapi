@@ -1,5 +1,6 @@
 fastapi==0.115.0
 uvicorn==0.14.0
+mangum==0.19.0
 motor==3.5.1
 bcrypt==4.2.0
 python-jose==3.3.0

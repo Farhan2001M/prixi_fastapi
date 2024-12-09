@@ -7,7 +7,7 @@ from .routes.VehicleRoutes import router as vehicle_router
 from .routes.predictionRoutes import router as prediction
 from .routes.recommendationRoutes import router as recommendation
 
-#App object
+# App object
 app = FastAPI()
 
 origins = ["http://localhost:3000",
@@ -31,9 +31,9 @@ app.include_router(prediction)
 app.include_router(recommendation)
 
 
-# @app.get("/")
-# async def read_root():
-#     return {"message": " Hello World..!"}
+@app.get("/")
+async def read_root():
+    return {"message": " Hello World..!"}
 
 
 
