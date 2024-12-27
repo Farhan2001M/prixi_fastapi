@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from ..models.VehiclesModel import VehicleRequest
 from ..config.VehicleDatabase import collection 
 from ..controllers.VehicleControllers import get_new_id
-from ..controllers.userSignupControllers import create_user , verify_user , get_current_user , get_user_by_email 
+from ..controllers.userSignupControllers import  get_current_user  
 from ..config.usersdatabase import signupcollectioninfo 
 
 from fastapi import Depends
@@ -13,6 +13,8 @@ from bson import ObjectId
 from datetime import datetime
 import uuid
 import logging
+
+
 
 # POST route to save vehicle data
 @router.post("/save-vehicles")
@@ -33,8 +35,6 @@ async def save_vehicle_data(request: VehicleRequest):
     await collection.insert_one(new_brand_document)
     return {"message": "Brand and models saved successfully", "brand_id": new_id}
 
-
-
 @router.get("/get-car-brands")
 async def get_car_brands():
     # Fetch only the `brandName` field from the Vehicles collection
@@ -42,7 +42,6 @@ async def get_car_brands():
     if not car_brands:
         raise HTTPException(status_code=404, detail="No car brands found")
     return car_brands
-
 
 @router.get("/get-car-brand/{brand_name}")
 async def get_car_brand(brand_name: str):
@@ -835,21 +834,6 @@ async def get_user_data_summary(current_user: str = Depends(get_current_user)):
         "totalRepliesReceived": total_replies_received,
         "totalModels": total_models
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

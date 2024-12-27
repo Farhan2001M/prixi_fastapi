@@ -67,7 +67,7 @@ class DeleteModelRequest(BaseModel):
 # Request model to get specific model info
 class ModelRequest(BaseModel):
     brand_name: str
-    model_name: str
+    modelname: str
 
 
 

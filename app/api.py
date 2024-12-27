@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes.adminRoutes import router as admin_router
 from .routes.userSignupRoutes import router as signup_router
 from .routes.VehicleRoutes import router as vehicle_router
-from .routes.predictionRoutes import router as prediction
 from .routes.recommendationRoutes import router as recommendation
+from .routes.predictionRoutes import router as prediction
 
 # App object
 app = FastAPI()
@@ -24,11 +24,11 @@ app.add_middleware(
     allow_headers = ["*"],
 )
 
-app.include_router(admin_router)
-app.include_router(signup_router)
-app.include_router(vehicle_router)
 app.include_router(prediction)
 app.include_router(recommendation)
+app.include_router(vehicle_router)
+app.include_router(signup_router)
+app.include_router(admin_router)
 
 
 @app.get("/")
@@ -36,5 +36,4 @@ async def read_root():
     return {"message": " Hello World..!"}
 
 
-
-
+# Changed version of node in settings

@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from ..models.adminmodel import LoginResponse , ForgotPasswordRequest , ValidateOTPRequest , PasswordChangeRequest  , DeleteModelRequest , AddModelRequest, Brand , VehicleModel , BrandResponse , ModelDetails , BrandModel , NewModel
-from ..controllers.adminControllers import verify_admin , get_current_user
+from ..models.adminmodel import LoginResponse , ForgotPasswordRequest , ValidateOTPRequest , PasswordChangeRequest , DeleteModelRequest , Brand , VehicleModel , BrandModel 
+from ..controllers.adminControllers import get_current_user
+from ..controllers.adminControllers import verify_admin
 from ..config.admindatabase import adminlogininfo , VehicleData , Vehiclecollection
-
 from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, HTTPException, status
 import random
 import requests
-
 router = APIRouter()
 from fastapi import HTTPException, status
 import bcrypt
@@ -16,30 +15,27 @@ import smtplib
 from email.message import EmailMessage
 from typing import Dict, Tuple
 from datetime import datetime, timedelta
-
 from fastapi import Depends 
-
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import List, Optional
 from pymongo import ReturnDocument
 import shutil
 import os
 import base64
-
-
 from fastapi import APIRouter
 from typing import List, Dict, Any
 
 
-# 8bcfc44f5850f6fae91803902df32139-3724298e-62508b4b
-
 router = APIRouter()
 
 
-@router.get('/')
-async def home():
-    # send_simple_message()
-    return {'msg': 'Welcome in my api'} 
+# @router.get('/')
+# async def home():
+#     # send_simple_message()
+#     return {'msg': 'Welcome in my Admin Routes '} 
+
+
+
 
 @router.post("/adminlogin", response_model=LoginResponse, tags=["Admin"])
 async def login_admin(email: str, password: str):
@@ -51,8 +47,6 @@ async def login_admin(email: str, password: str):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password.")
     return result    
 
-
-# otp_storage: Dict[str, Tuple[str, datetime]] = {}
 
 @router.post("/admin-forgot-password", tags=["Admin"])
 async def forgot_password(request: ForgotPasswordRequest):
@@ -93,7 +87,6 @@ async def forgot_password(request: ForgotPasswordRequest):
     return {"message": "OTP sent successfully."}
 
 
-
 @router.post("/admin-validate-otp", tags=["Admin"])
 async def validate_otp(request: ValidateOTPRequest):
     email = request.email
@@ -126,29 +119,6 @@ async def validate_otp(request: ValidateOTPRequest):
     return {"message": "OTP validated successfully."}
 
 
-
-
-# @router.post("/admin-validate-otp", tags=["Admin"])
-# async def validate_otp(request: ValidateOTPRequest):
-#     email = request.email
-#     entered_otp = request.otp
-
-#     # Check if OTP exists and has not expired
-#     stored_otp, otp_expiry = otp_storage.get(email, (None, None))
-#     if stored_otp is None or otp_expiry is None:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP not generated or expired.")
-#     if datetime.utcnow() > otp_expiry:
-#         # OTP expired
-#         otp_storage.pop(email, None)  # Remove expired OTP
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
-#     if stored_otp != entered_otp:
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP is not correct.")
-#     print("OTP MATCHES")
-#     # Optionally, clear the OTP after successful validation
-#     otp_storage.pop(email, None)
-#     return {"message": "OTP validated successfully."}
-
-
 @router.post("/admin-change-password", tags=["Admin"])
 async def change_password(request: PasswordChangeRequest):
     user = await adminlogininfo.find_one({"email": request.email})
@@ -166,11 +136,11 @@ async def change_password(request: PasswordChangeRequest):
     except Exception as e:
         raise HTTPException(500, "An error occurred while updating the password")
 
+
 @router.get("/protected-route", tags=["Admin"])
 async def protected_route(current_user: str = Depends(get_current_user)):
     # Your protected code here
     return {"message": "This is a protected route", "current_user": current_user}
-
 
 
 @router.get("/get-brands&models")
@@ -214,17 +184,6 @@ async def add_vehicle_brand(brand: Brand):
     return {"message": "Brand added successfully."}
 
 
-# @router.post("/addvehiclebrand")
-# async def add_vehicle_brand(brand: Brand):
-#     brand_name_lower = brand.brandName.lower()
-#     existing_brand = await Vehiclecollection.find_one({"brandName": brand_name_lower})
-#     if existing_brand:
-#         raise HTTPException(status_code=400, detail="Brand already exists.")
-#     new_brand = {"brandName": brand_name_lower,  "models": [] }
-#     await Vehiclecollection.insert_one(new_brand)
-#     return {"message": "Brand added successfully."}
-
-
 @router.post("/addVehiclemodel")
 async def add_vehicle_model(brand_name: str, model: VehicleModel, images: List[UploadFile] = File(...)):
     # Find the brand in the database
@@ -263,9 +222,6 @@ async def get_vehicles():
     vehicles_cursor = Vehiclecollection.find()  # Get a cursor for all documents
     vehicles = await vehicles_cursor.to_list(length=None)  # Fetch all documents into a list
     return [serialize_vehicle(vehicle) for vehicle in vehicles]
-
-
-
 
 
 @router.get("/getBrandData/{brand_name}", response_model=Optional[BrandModel])
@@ -368,8 +324,6 @@ async def get_model_data(brand_name: str, model_name: str):
 
 
 
-
-
 # Update a specific model for a brand
 @router.put("/vehicles/{brand_name}/update-model/{model_name}")
 async def update_model(
@@ -461,6 +415,33 @@ async def delete_brand_model(data: DeleteModelRequest):
         return {"message": f"Model '{data.modelName}' successfully deleted from brand '{data.brandName}'"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting model: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
