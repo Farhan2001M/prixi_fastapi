@@ -489,7 +489,8 @@ async def get_recommended_vehicles(current_user: str = Depends(get_current_user)
 
 
 
-
+# Set Gensim's logger to only show WARNING level logs and higher
+logging.getLogger('gensim').setLevel(logging.WARNING)
 
 
 # Initialize Word2Vec and Scaler

@@ -1,8 +1,8 @@
 # MongoDB Driver
 import motor.motor_asyncio
 
-client = motor.motor_asyncio.AsyncIOMotorClient('mongodb://localhost:27017')
-
+client = motor.motor_asyncio.AsyncIOMotorClient('mongodb+srv://chfarhanilyas550:farhan123@farhan0.k7f9z.mongodb.net/Prixi?retryWrites=true&w=majority')
+# client = motor.motor_asyncio.AsyncIOMotorClient('mongodb://localhost:27017')
 
 db = client.PrixiDB
 
